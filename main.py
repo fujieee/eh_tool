@@ -1,5 +1,6 @@
 import requests
 import os
+import shutil
 from bs4 import BeautifulSoup
 from PIL import Image
 from io import BytesIO
@@ -15,21 +16,32 @@ def main():
     # 対象のディレクトリの存在チェック
     if not os.path.exists(save_path):
         os.makedirs(save_path)
+    if not os.path.exists(TEMP_DIR_PATH):
+        os.makedirs(TEMP_DIR_PATH)
 
     # 画像一覧の1ページ目のURLを読み込み
     soup = get_soup(target_url)
     # 画像一覧の全ページのURLを取得
     arr_url = get_page_url_list(soup)
-    LOGGER.info(pp.pprint(arr_url))
+    pp.pprint(arr_url)
 
     LOGGER.info('画像一覧ページのループ開始')
     for list_url in arr_url:
+        # 一覧に対象のURLがある場合は対象のURLの処理をスキップ
+        if is_exist_url_in_file(list_url):
+            continue
+
         # 画像のURLを取得
         arr_pics_url = get_pics_url_list(list_url)
 
         for url in arr_pics_url:
             save_images(save_path, url)
+
+        with open(TEMP_LIST_PATH, 'a') as f:
+            f.write(list_url + '\n')
+
     LOGGER.info('画像一覧ページのループ終了')
+    after_exec()
     LOGGER.info('処理終了')
 
 
@@ -38,15 +50,11 @@ def request_get(url: str) -> requests:
 
 
 def get_soup(url: str) -> BeautifulSoup:
-    LOGGER.info('TOPページ情報取得開始')
     req = request_get(url)
-    LOGGER.info('TOPページ情報取得完了')
     return BeautifulSoup(req.text, 'lxml')
 
 
 def get_page_url_list(soup: BeautifulSoup) -> list:
-    LOGGER.info('一覧ページのURL取得開始')
-    # print(soup.prettify())
     # ページングのtdタグを取得
     arr_page_div = soup.find_all("div", class_="gtb")
     arr_page_td = arr_page_div[0].select('table.ptt tr td')
@@ -61,7 +69,6 @@ def get_page_url_list(soup: BeautifulSoup) -> list:
     arr_url = [base_url]
     for num in range(1, int(page_max)):
         arr_url.append('{}?p={}'.format(base_url, num))
-    LOGGER.info('一覧ページのURL取得終了')
     return arr_url
 
 
@@ -79,10 +86,26 @@ def get_pics_url_list(list_url: str) -> list:
     return arr_pics_url
 
 
+def is_exist_url_in_file(list_url: str) -> bool:
+    chk = False
+    if os.path.isfile(TEMP_LIST_PATH):
+        # すでに読み込み済みのURLかどうかチェック
+        with open(TEMP_LIST_PATH, 'r') as ro_files:
+            for file_url in ro_files:
+                file_url = file_url.strip()
+                # 既に一覧全ての画像をDL済みの場合は次のループへ
+                if list_url == file_url:
+                    chk = True
+                    LOGGER.info('skipped：' + file_url)
+                    break
+    return chk
+
+
 def save_images(save_path: str, url: str) -> bool:
     LOGGER.info(url)
 
     res = request_get(url)
+    LOGGER.info('url: ' + url)
     soup = BeautifulSoup(res.text, 'lxml')
     arr_div = soup.find('div', id='i3')
     img_tag = arr_div.select_one('a > img')
@@ -90,11 +113,9 @@ def save_images(save_path: str, url: str) -> bool:
     LOGGER.info(img_url)
 
     file_name = img_url.split('/')[-1]
-    LOGGER.info(file_name)
     file_path = '{}/{}'.format(save_path, file_name)
-    LOGGER.info(file_path)
     if os.path.isfile(file_path):
-        LOGGER.info('already exists')
+        LOGGER.info('exist: ' + file_path)
     else:
         response = request_get(img_url)
 
@@ -102,6 +123,12 @@ def save_images(save_path: str, url: str) -> bool:
         if response.status_code == 200:
             i = Image.open(BytesIO(response.content))
             i.save(file_path, 'JPEG', quality=100)
+
+
+def after_exec():
+    dir = TEMP_DIR_PATH + '/'
+    LOGGER.info('削除します: ' + dir)
+    shutil.rmtree(dir)
 
 
 if __name__ == '__main__':
