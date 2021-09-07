@@ -26,16 +26,22 @@ def main():
     pp.pprint(arr_url)
 
     LOGGER.info('画像一覧ページのループ開始')
-    for list_url in arr_url:
+    for index, list_url in enumerate(arr_url):
         # 一覧に対象のURLがある場合は対象のURLの処理をスキップ
-        if is_exist_url_in_file(list_url):
+        if is_exist_url_in_file(list_url, TEMP_LIST_PATH, False):
             continue
+        # 画像ファイルがDL済みか判定するファイル
+        temp_file = TEMP_DIR_PATH + '/' + str(index+1) + '.csv'
 
         # 画像のURLを取得
         arr_pics_url = get_pics_url_list(list_url)
 
         for url in arr_pics_url:
-            save_images(save_path, url)
+            if is_exist_url_in_file(url, temp_file, True):
+                continue
+
+            # 保存先のパス、画像ページのURL、画像一覧の番号
+            save_images(save_path, url, temp_file)
 
         with open(TEMP_LIST_PATH, 'a') as f:
             f.write(list_url + '\n')
@@ -86,31 +92,34 @@ def get_pics_url_list(list_url: str) -> list:
     return arr_pics_url
 
 
-def is_exist_url_in_file(list_url: str) -> bool:
+def is_exist_url_in_file(list_url: str, path: str, isFile: bool) -> bool:
     chk = False
-    if os.path.isfile(TEMP_LIST_PATH):
+    if os.path.isfile(path):
         # すでに読み込み済みのURLかどうかチェック
-        with open(TEMP_LIST_PATH, 'r') as ro_files:
+        with open(path, 'r') as ro_files:
             for file_url in ro_files:
                 file_url = file_url.strip()
                 # 既に一覧全ての画像をDL済みの場合は次のループへ
                 if list_url == file_url:
                     chk = True
-                    LOGGER.info('skipped：' + file_url)
+                    message = 'skipped：' + file_url
+                    if isFile:
+                        # ログを見やすくするためにインデント追加
+                        message = '  ' + message
+                    LOGGER.info(message)
+
                     break
     return chk
 
 
-def save_images(save_path: str, url: str) -> bool:
-    LOGGER.info(url)
-
+def save_images(save_path: str, url: str, temp_file: str) -> bool:
+    # LOGGER.info('url: ' + url)
     res = request_get(url)
-    LOGGER.info('url: ' + url)
     soup = BeautifulSoup(res.text, 'lxml')
     arr_div = soup.find('div', id='i3')
     img_tag = arr_div.select_one('a > img')
     img_url = img_tag['src']
-    LOGGER.info(img_url)
+    # LOGGER.info(img_url)
 
     file_name = img_url.split('/')[-1]
     file_path = '{}/{}'.format(save_path, file_name)
@@ -118,17 +127,20 @@ def save_images(save_path: str, url: str) -> bool:
         LOGGER.info('exist: ' + file_path)
     else:
         response = request_get(img_url)
-
-        LOGGER.info("https status code: {}".format(response.status_code))
         if response.status_code == 200:
             i = Image.open(BytesIO(response.content))
             i.save(file_path, 'JPEG', quality=100)
+            with open(temp_file, 'a') as f:
+                f.write(url + '\n')
+            LOGGER.info('Saved! ' + file_name)
 
 
 def after_exec():
     dir = TEMP_DIR_PATH + '/'
     LOGGER.info('削除します: ' + dir)
     shutil.rmtree(dir)
+    with open(SAVE_PATH + '/done', 'a') as f:
+        f.write('')
 
 
 if __name__ == '__main__':
