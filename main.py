@@ -20,7 +20,7 @@ def main():
     soup = get_soup(target_url)
     # 画像一覧の全ページのURLを取得
     arr_url = get_page_url_list(soup)
-    LOGGER.info(arr_url)
+    LOGGER.info(pp.pprint(arr_url))
 
     LOGGER.info('画像一覧ページのループ開始')
     for list_url in arr_url:
@@ -49,14 +49,7 @@ def get_page_url_list(soup: BeautifulSoup) -> list:
     # print(soup.prettify())
     # ページングのtdタグを取得
     arr_page_div = soup.find_all("div", class_="gtb")
-    print(arr_page_div)
     arr_page_td = arr_page_div[0].select('table.ptt tr td')
-    print('table.ptt: ')
-    print(arr_page_div[0].select('table.ptt'))
-    print('table.ptt tr: ')
-    print(arr_page_div[0].select('table.ptt tr'))
-    print(arr_page_td)
-    # arr_page_td = soup.select('table.ptt tbody tr td')
     # 配列には"<"と">"を含む、また0から始まるので">"と0の分の2を引く
     page_max = arr_page_td[len(arr_page_td) - 2].select("a")[0].string
 

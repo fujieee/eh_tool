@@ -1,3 +1,4 @@
+import pprint
 from logging import getLogger, INFO, basicConfig
 
 
@@ -17,3 +18,4 @@ CONFIG_HEADER = {
 basicConfig(level=INFO, format=' %(levelname)s - %(message)s')
 LOGGER = getLogger(__name__)
 
+pp = pprint.PrettyPrinter(indent=4)
